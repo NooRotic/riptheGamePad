@@ -19,46 +19,73 @@ impl PartialOrd for Scheduled { fn partial_cmp(&self, o: &Self) -> Option<std::c
 
 #[derive(Clone)]
 pub(crate) struct Timer {
-    state: Arc<(Mutex<BinaryHeap<Reverse<Scheduled>>>, Condvar)>,
+    state: Arc<TimerState>,
+}
+
+struct TimerState {
+    heap: Mutex<BinaryHeap<Reverse<Scheduled>>>,
+    cvar: Condvar,
+    shutdown: Mutex<bool>,
 }
 
 impl Timer {
     pub fn new(tx: Sender<InputEvent>) -> Self {
-        let state: Arc<(Mutex<BinaryHeap<Reverse<Scheduled>>>, Condvar)> =
-            Arc::new((Mutex::new(BinaryHeap::new()), Condvar::new()));
-        let state_clone = state.clone();
+        let state = Arc::new(TimerState {
+            heap: Mutex::new(BinaryHeap::new()),
+            cvar: Condvar::new(),
+            shutdown: Mutex::new(false),
+        });
+        let thread_state = state.clone();
         thread::Builder::new()
             .name("rgp-input-ai-timer".into())
-            .spawn(move || timer_loop(state_clone, tx))
+            .spawn(move || timer_loop(thread_state, tx))
             .expect("spawn timer thread");
         Timer { state }
     }
 
     pub fn schedule(&self, deadline: Instant, event: InputEvent) {
-        let (lock, cvar) = &*self.state;
-        let mut heap = lock.lock().unwrap();
+        let mut heap = self.state.heap.lock().unwrap();
         heap.push(Reverse(Scheduled { deadline, event }));
-        cvar.notify_one();
+        self.state.cvar.notify_all();
+    }
+
+    /// Signal the timer thread to exit at its next wake.
+    pub(crate) fn shutdown(&self) {
+        let mut sd = self.state.shutdown.lock().unwrap();
+        *sd = true;
+        drop(sd);
+        self.state.cvar.notify_all();
     }
 }
 
-fn timer_loop(state: Arc<(Mutex<BinaryHeap<Reverse<Scheduled>>>, Condvar)>, tx: Sender<InputEvent>) {
-    let (lock, cvar) = &*state;
+fn timer_loop(state: Arc<TimerState>, tx: Sender<InputEvent>) {
     loop {
-        let mut heap = lock.lock().unwrap();
+        // Check shutdown flag.
+        {
+            let sd = state.shutdown.lock().unwrap();
+            if *sd { return; }
+        }
+        let mut heap = state.heap.lock().unwrap();
         let timeout = match heap.peek() {
             Some(Reverse(s)) => s.deadline.saturating_duration_since(Instant::now()),
             None => Duration::from_secs(60),
         };
-        let res = cvar.wait_timeout(heap, timeout).unwrap();
+        let res = state.cvar.wait_timeout(heap, timeout).unwrap();
         heap = res.0;
+        // Re-check shutdown after wait.
+        {
+            let sd = state.shutdown.lock().unwrap();
+            if *sd { return; }
+        }
         let now = Instant::now();
         while let Some(Reverse(s)) = heap.peek() {
             if s.deadline <= now {
-                let s = heap.pop().unwrap().0;
-                if tx.send(s.event).is_err() {
-                    return; // receiver dropped; exit thread
+                let scheduled = heap.pop().unwrap().0;
+                drop(heap);
+                if tx.send(scheduled.event).is_err() {
+                    return;
                 }
+                heap = state.heap.lock().unwrap();
             } else {
                 break;
             }
