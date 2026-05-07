@@ -234,3 +234,22 @@ fn profile_switch_releases_dropped_devices() {
         "AI-held button should be cleared after switch to fightstick-mixer"
     );
 }
+
+#[test]
+fn panic_disconnect_releases_held_buttons() {
+    let h = Harness::new(FOUR_PROFILES_TOML);
+    h.set_profile("ai-only");
+    let agent = h.ai_handle("test-agent");
+    agent.press(ButtonId::South, Duration::from_secs(60)); // long-held
+    std::thread::sleep(Duration::from_millis(30));
+    let mid = h.last().expect("mid");
+    assert_ne!(mid.buttons.raw & vigem_client::XButtons::A, 0,
+               "AI press should appear on pad before panic");
+
+    // Trigger panic.
+    h.control_tx.send(ControlMsg::PanicDisconnect).unwrap();
+    std::thread::sleep(Duration::from_millis(50));
+    let after = h.last().expect("after panic");
+    assert_eq!(after.buttons.raw & vigem_client::XButtons::A, 0,
+               "panic disconnect should clear held button");
+}

@@ -100,10 +100,10 @@ pub fn run_on_main(
                 update_check_state(&profile_items, current_idx);
                 let _ = control_tx
                     .send(ControlMsg::SetActiveProfile(profiles[current_idx].clone()));
+            } else if ev.id() == panic_hotkey.id() {
+                tracing::warn!(target: "rgp::tray", "panic_disconnect triggered");
+                let _ = control_tx.send(ControlMsg::PanicDisconnect);
             }
-            // panic_hotkey (Ctrl+F12): intentionally not handled here.
-            // The app layer maps this to a panic/disconnect profile or
-            // sends a separate ControlMsg variant when added.
         }
 
         // If tray click events do not arrive, uncomment this block and add

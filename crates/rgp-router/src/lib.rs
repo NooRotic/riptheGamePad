@@ -73,6 +73,13 @@ pub fn run(
                     Ok(ControlMsg::ListDevices(reply)) => {
                         let _ = reply.send(vec![]);
                     }
+                    Ok(ControlMsg::PanicDisconnect) => {
+                        tracing::warn!(target: "rgp::router", "panic disconnect: zeroing pad state");
+                        state = PadState::default();
+                        // Also clear last_seen so a profile-switch doesn't restore stuck state.
+                        last_seen.clear();
+                        let _ = pad_tx.try_send(state.clone());
+                    }
                     Ok(ControlMsg::Quit) => break,
                     Err(_) => break,
                 },
