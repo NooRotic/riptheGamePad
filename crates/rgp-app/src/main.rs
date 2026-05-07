@@ -10,6 +10,9 @@ use rgp_core::RgpError;
 struct Args {
     #[arg(long, help = "Path to config TOML (default: %APPDATA%/riptheGamePad/config.toml)")]
     config: Option<PathBuf>,
+
+    #[arg(long, help = "Print connected gamepad UUIDs and exit")]
+    list_devices: bool,
 }
 
 fn config_path(args: &Args) -> PathBuf {
@@ -29,6 +32,26 @@ fn main() {
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"))
         )
         .init();
+
+    if args.list_devices {
+        let devices = rgp_input_physical::list_connected();
+        if devices.is_empty() {
+            println!("No gamepads detected. Plug in a controller and try again.");
+        } else {
+            println!("Connected gamepads:");
+            for d in devices {
+                let uuid = match d.id {
+                    rgp_core::SourceId::Physical(s) => s,
+                    _ => "(unknown)".to_string(),
+                };
+                println!("  {} → {}", uuid, d.name);
+            }
+            println!();
+            println!("Add an entry to [devices] in your config.toml:");
+            println!("  fight_stick = \"<one of the uuids above>\"");
+        }
+        return;
+    }
 
     let cfg_path = config_path(&args);
     tracing::info!(path = %cfg_path.display(), "loading config");
