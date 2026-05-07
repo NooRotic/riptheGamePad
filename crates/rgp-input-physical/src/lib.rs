@@ -109,16 +109,21 @@ fn source_id_for(gilrs: &Gilrs, id: GamepadId) -> String {
 /// init failure rather than propagating an error, matching the "list is
 /// best-effort" use-case.
 pub fn list_connected() -> Vec<DeviceInfo> {
-    let gilrs = match Gilrs::new() {
+    let mut gilrs = match Gilrs::new() {
         Ok(g) => g,
         Err(_) => return vec![],
     };
+    // Drain any pending events. On some Windows setups gilrs.gamepads()
+    // returns an empty iterator until the first poll runs; this ensures
+    // XInput / DirectInput devices already plugged in get enumerated.
+    while gilrs.next_event().is_some() {}
     gilrs
         .gamepads()
+        .filter(|(_id, gp)| gp.is_connected())
         .map(|(_id, gp)| DeviceInfo {
             id: SourceId::Physical(format!("uuid:{}", uuid::Uuid::from_bytes(gp.uuid()))),
             name: gp.name().to_string(),
-            connected: gp.is_connected(),
+            connected: true,
         })
         .collect()
 }
