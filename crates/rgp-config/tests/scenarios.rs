@@ -214,6 +214,33 @@ panic_disconnect = "Ctrl+F12"
     assert!(parse_str(bad).is_err());
 }
 
+#[test]
+fn default_profile_not_found_is_validation_error() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "real-profile"
+name = "Real"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "*" }
+to = "passthrough"
+[default]
+profile = "nonexistent-profile"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = parse_str(bad).expect_err("must error");
+    let msg = format!("{err}");
+    assert!(msg.contains("default") || msg.contains("nonexistent-profile"),
+            "expected message about default/nonexistent-profile, got: {msg}");
+}
+
 // ---------------------------------------------------------------------------
 // Tests for the remaining three scenarios from spec §6
 // ---------------------------------------------------------------------------
