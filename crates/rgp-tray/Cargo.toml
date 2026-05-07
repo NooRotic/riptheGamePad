@@ -1,0 +1,13 @@
+[package]
+name = "rgp-tray"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rgp-core = { path = "../rgp-core" }
+crossbeam-channel = { workspace = true }
+tray-icon = { workspace = true }
+global-hotkey = { workspace = true }
+tracing = { workspace = true }
