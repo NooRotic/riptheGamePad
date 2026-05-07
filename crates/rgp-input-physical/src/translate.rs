@@ -1,5 +1,5 @@
 use gilrs::{Axis, Button, EventType};
-use rgp_core::{AxisId, ButtonId, Control, InputEvent, SourceId};
+use rgp_core::{AxisId, ButtonId, Control, InputEvent, SourceId, TriggerId};
 use std::time::Instant;
 
 /// Translate a gilrs `EventType` into an `InputEvent`.
@@ -15,7 +15,17 @@ pub fn translate_event_type(et: &EventType, source_id: &str) -> Option<InputEven
     let (control, value) = match et {
         EventType::ButtonPressed(btn, _) => (Control::Button(map_gilrs_button(*btn)?), 1.0),
         EventType::ButtonReleased(btn, _) => (Control::Button(map_gilrs_button(*btn)?), 0.0),
-        EventType::AxisChanged(axis, v, _) => (Control::Axis(map_gilrs_axis(*axis)?), *v),
+        EventType::AxisChanged(axis, v, _) => {
+            if let Some(a) = map_gilrs_axis(*axis) {
+                (Control::Axis(a), *v)
+            } else if let Some(t) = map_gilrs_trigger_axis(*axis) {
+                // gilrs LeftZ/RightZ are typically 0..1 with deadzone applied; some
+                // platforms emit -1..1. Pass through; rgp-virtual-pad clamps to 0..1.
+                (Control::Trigger(t), *v)
+            } else {
+                return None;
+            }
+        }
         // ButtonChanged carries an analogue pressure value; we rely on
         // ButtonPressed / ButtonReleased for discrete events instead.
         EventType::ButtonChanged(_, _, _) => return None,
@@ -35,9 +45,9 @@ pub fn translate_event_type(et: &EventType, source_id: &str) -> Option<InputEven
 /// Map a gilrs `Button` to a `ButtonId`.
 ///
 /// gilrs uses `LeftTrigger` / `RightTrigger` for the shoulder bumpers and
-/// `LeftTrigger2` / `RightTrigger2` for the analogue triggers (L2/R2).
-/// Analogue triggers also appear as `Axis::LeftZ` / `Axis::RightZ`; they are
-/// not yet wired in v1 and are a known gap.
+/// `LeftTrigger2` / `RightTrigger2` for the analogue triggers; analogue triggers
+/// are read instead from `Axis::LeftZ` / `Axis::RightZ` via
+/// `map_gilrs_trigger_axis`.
 pub fn map_gilrs_button(b: Button) -> Option<ButtonId> {
     match b {
         Button::South => Some(ButtonId::South),
@@ -60,16 +70,22 @@ pub fn map_gilrs_button(b: Button) -> Option<ButtonId> {
     }
 }
 
-/// Map a gilrs `Axis` to an `AxisId`.
-///
-/// `Axis::LeftZ` and `Axis::RightZ` (L2/R2 analogue triggers) are intentionally
-/// unmapped in v1.
+/// Map a gilrs `Axis` to an `AxisId` (sticks only).
 pub fn map_gilrs_axis(a: Axis) -> Option<AxisId> {
     match a {
         Axis::LeftStickX => Some(AxisId::LeftStickX),
         Axis::LeftStickY => Some(AxisId::LeftStickY),
         Axis::RightStickX => Some(AxisId::RightStickX),
         Axis::RightStickY => Some(AxisId::RightStickY),
+        _ => None,
+    }
+}
+
+/// Map a gilrs trigger `Axis` (`LeftZ`/`RightZ`) to a `TriggerId`.
+pub fn map_gilrs_trigger_axis(a: Axis) -> Option<TriggerId> {
+    match a {
+        Axis::LeftZ => Some(TriggerId::L2),
+        Axis::RightZ => Some(TriggerId::R2),
         _ => None,
     }
 }
@@ -145,8 +161,11 @@ mod tests {
     }
 
     #[test]
-    fn trigger_axes_unmapped_in_v1() {
-        // Axis::LeftZ / RightZ (L2/R2 analogue) are intentionally not wired in v1.
+    fn trigger_axes_map_to_triggers() {
+        assert_eq!(map_gilrs_trigger_axis(Axis::LeftZ), Some(TriggerId::L2));
+        assert_eq!(map_gilrs_trigger_axis(Axis::RightZ), Some(TriggerId::R2));
+        assert_eq!(map_gilrs_trigger_axis(Axis::LeftStickX), None);
+        // map_gilrs_axis still returns None for triggers — they go through map_gilrs_trigger_axis.
         assert!(map_gilrs_axis(Axis::LeftZ).is_none());
         assert!(map_gilrs_axis(Axis::RightZ).is_none());
     }
