@@ -1,0 +1,10 @@
+[package]
+name = "rgp-input-ai"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rgp-core = { path = "../rgp-core" }
+crossbeam-channel = { workspace = true }

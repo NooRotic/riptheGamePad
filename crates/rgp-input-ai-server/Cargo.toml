@@ -1,0 +1,18 @@
+[package]
+name = "rgp-input-ai-server"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rgp-core = { path = "../rgp-core" }
+rgp-input-ai = { path = "../rgp-input-ai" }
+crossbeam-channel = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+futures-util = "0.3"

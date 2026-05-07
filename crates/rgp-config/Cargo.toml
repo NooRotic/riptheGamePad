@@ -1,0 +1,12 @@
+[package]
+name = "rgp-config"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rgp-core = { path = "../rgp-core" }
+serde = { workspace = true }
+toml = { workspace = true }
+thiserror = { workspace = true }

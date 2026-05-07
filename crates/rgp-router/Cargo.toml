@@ -1,0 +1,12 @@
+[package]
+name = "rgp-router"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rgp-core = { path = "../rgp-core" }
+rgp-config = { path = "../rgp-config" }
+crossbeam-channel = { workspace = true }
+tracing = { workspace = true }
