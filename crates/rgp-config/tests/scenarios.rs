@@ -341,4 +341,82 @@ fn fightstick_mixer_compiles_all_dpad_rules() {
     }
 }
 
+#[test]
+fn deadzone_field_rejected_in_v1() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "South" }
+to = { axis = "LeftStickX", value = 1.0 }
+deadzone = 0.1
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = rgp_config::parse_str(bad).expect_err("must reject deadzone");
+    assert!(format!("{err}").contains("deadzone"));
+}
+
+#[test]
+fn invert_field_rejected_in_v1() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "South" }
+to = "passthrough"
+invert = true
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = rgp_config::parse_str(bad).expect_err("must reject invert");
+    assert!(format!("{err}").contains("invert"));
+}
+
+#[test]
+fn sensitivity_field_rejected_in_v1() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "South" }
+to = "passthrough"
+sensitivity = 1.5
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = rgp_config::parse_str(bad).expect_err("must reject sensitivity");
+    assert!(format!("{err}").contains("sensitivity"));
+}
+
 use rgp_config::RuleAction;

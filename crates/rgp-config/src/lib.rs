@@ -88,6 +88,29 @@ fn validate(cfg: &Config) -> Result<(), RgpError> {
         }
     }
 
+    // v1: reject modifier fields with a clear error so users don't silently
+    // get unscaled inputs. Implement them as a follow-up; for now, surface
+    // the limitation explicitly.
+    for p in &cfg.profiles {
+        for r in &p.rules {
+            if r.deadzone.is_some() {
+                return Err(RgpError::Config { line: None,
+                    msg: format!("'deadzone' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
+                                 r.from.device, r.from.control) });
+            }
+            if r.invert {
+                return Err(RgpError::Config { line: None,
+                    msg: format!("'invert' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
+                                 r.from.device, r.from.control) });
+            }
+            if r.sensitivity.is_some() {
+                return Err(RgpError::Config { line: None,
+                    msg: format!("'sensitivity' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
+                                 r.from.device, r.from.control) });
+            }
+        }
+    }
+
     Ok(())
 }
 
