@@ -3,3 +3,8 @@
 *.pdb
 .vscode/
 .idea/
+
+# Third-party installers downloaded for testing (e.g., ViGEmBus)
+*.exe
+!target/release/*.exe
+!target/debug/*.exe
