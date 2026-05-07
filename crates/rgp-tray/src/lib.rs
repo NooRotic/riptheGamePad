@@ -11,6 +11,17 @@ use tray_icon::{
     TrayIconBuilder,
 };
 
+const TRAY_ICON_PNG: &[u8] = include_bytes!("../../../assets/icons/rip_icon.png");
+
+fn build_icon() -> Result<tray_icon::Icon, RgpError> {
+    let img = image::load_from_memory(TRAY_ICON_PNG)
+        .map_err(|e| RgpError::Channel(format!("decode icon png: {e}")))?
+        .to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    tray_icon::Icon::from_rgba(img.into_raw(), w, h)
+        .map_err(|e| RgpError::Channel(format!("build tray icon: {e}")))
+}
+
 pub fn run_on_main(
     control_tx: Sender<ControlMsg>,
     profiles: Vec<ProfileId>,
@@ -45,6 +56,7 @@ pub fn run_on_main(
     let _tray = TrayIconBuilder::new()
         .with_menu(Box::new(tray_menu))
         .with_tooltip("riptheGamePad")
+        .with_icon(build_icon()?)
         .build()
         .map_err(|e| RgpError::Channel(format!("tray build: {e}")))?;
 
