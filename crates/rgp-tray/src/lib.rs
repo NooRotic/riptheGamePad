@@ -3,6 +3,7 @@ pub mod menu;
 
 use crossbeam_channel::Sender;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+use rgp_config::HotkeyConfig;
 use rgp_core::{ControlMsg, ProfileId, RgpError};
 use std::time::Duration;
 use tray_icon::{
@@ -13,6 +14,7 @@ use tray_icon::{
 pub fn run_on_main(
     control_tx: Sender<ControlMsg>,
     profiles: Vec<ProfileId>,
+    hotkey_config: HotkeyConfig,
 ) -> Result<(), RgpError> {
     if profiles.is_empty() {
         return Err(RgpError::Channel("no profiles configured".into()));
@@ -49,9 +51,12 @@ pub fn run_on_main(
     let manager = GlobalHotKeyManager::new()
         .map_err(|e| RgpError::Channel(format!("hotkey manager: {e}")))?;
 
-    let next_hotkey = hotkeys::parse("F9").map_err(RgpError::Channel)?;
-    let prev_hotkey = hotkeys::parse("F10").map_err(RgpError::Channel)?;
-    let panic_hotkey = hotkeys::parse("Ctrl+F12").map_err(RgpError::Channel)?;
+    let next_hotkey = hotkeys::parse(&hotkey_config.next_profile)
+        .map_err(RgpError::Channel)?;
+    let prev_hotkey = hotkeys::parse(&hotkey_config.prev_profile)
+        .map_err(RgpError::Channel)?;
+    let panic_hotkey = hotkeys::parse(&hotkey_config.panic_disconnect)
+        .map_err(RgpError::Channel)?;
 
     manager
         .register(next_hotkey)

@@ -64,7 +64,7 @@ fn main() {
     let h_ai    = rgp_input_ai_server::run(events_tx.clone(), config.server.addr, shutdown_rx.clone());
 
     let profile_ids: Vec<_> = config.profiles.iter().map(|p| p.id.clone()).collect();
-    if let Err(e) = rgp_tray::run_on_main(control_tx, profile_ids) {
+    if let Err(e) = rgp_tray::run_on_main(control_tx, profile_ids, config.hotkeys.clone()) {
         tracing::error!(?e, "tray error");
     }
     drop(shutdown_tx);

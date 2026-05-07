@@ -7,6 +7,7 @@ authors.workspace = true
 
 [dependencies]
 rgp-core = { path = "../rgp-core" }
+rgp-config = { path = "../rgp-config" }
 crossbeam-channel = { workspace = true }
 tray-icon = { workspace = true }
 global-hotkey = { workspace = true }
