@@ -67,12 +67,16 @@ fn main() {
     let pad = match rgp_virtual_pad::connect() {
         Ok(p) => p,
         Err(e) => {
-            tracing::error!(?e, "ViGEmBus probe failed");
-            // For v1: print error and exit. A future improvement is to run the
-            // tray in red-error mode without input/router threads.
-            eprintln!("ViGEmBus error: {e}");
-            eprintln!("Install ViGEmBus from https://github.com/ViGEm/ViGEmBus/releases and try again.");
-            std::process::exit(2);
+            tracing::error!(?e, "ViGEmBus probe failed; entering tray-error mode");
+            let msg = format!("{e}. Install ViGEmBus from github.com/ViGEm/ViGEmBus/releases");
+            // Don't spawn input/router threads — only the tray runs.
+            if let Err(tray_err) = rgp_tray::run_error_mode(msg) {
+                tracing::error!(?tray_err, "error-mode tray failed");
+                eprintln!("ViGEmBus error: {e}");
+                eprintln!("(Additionally, the error tray failed to start: {tray_err})");
+                std::process::exit(2);
+            }
+            return;
         }
     };
 

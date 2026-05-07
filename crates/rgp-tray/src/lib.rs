@@ -148,3 +148,40 @@ fn update_check_state(items: &[CheckMenuItem], active: usize) {
         item.set_checked(i == active);
     }
 }
+
+/// Run the tray in error-only mode. Used when a fatal startup precondition
+/// fails (e.g., ViGEmBus not installed). The tray shows a tooltip indicating
+/// the error and only offers a Quit menu item; no input/router threads run.
+///
+/// Blocks the calling thread until the user picks Quit.
+///
+// run_error_mode is verified manually: uninstall ViGEmBus, run the binary,
+// confirm the tray shows up with a red error tooltip and only Quit works.
+pub fn run_error_mode(error_msg: String) -> Result<(), RgpError> {
+    let menu = Menu::new();
+    let header = MenuItem::new(format!("Error: {error_msg}"), false, None);
+    menu.append(&header).map_err(|e| RgpError::Channel(format!("menu append: {e}")))?;
+    let separator = tray_icon::menu::PredefinedMenuItem::separator();
+    let _ = menu.append(&separator);
+    let quit = MenuItem::new("Quit", true, None);
+    menu.append(&quit).map_err(|e| RgpError::Channel(format!("menu append quit: {e}")))?;
+
+    let _tray = TrayIconBuilder::new()
+        .with_menu(Box::new(menu))
+        .with_tooltip(format!("riptheGamePad — ERROR: {error_msg}"))
+        .with_icon(build_icon()?)
+        .build()
+        .map_err(|e| RgpError::Channel(format!("tray build: {e}")))?;
+
+    let menu_rx = MenuEvent::receiver();
+    loop {
+        if let Ok(ev) = menu_rx.try_recv() {
+            if ev.id() == quit.id() {
+                tracing::info!(target: "rgp::tray", "quit requested from error-mode tray");
+                break;
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    Ok(())
+}
