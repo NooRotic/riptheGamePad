@@ -32,7 +32,7 @@ fn main() {
 
     let cfg_path = config_path(&args);
     tracing::info!(path = %cfg_path.display(), "loading config");
-    let config = match rgp_config::load(&cfg_path) {
+    let config = match ensure_config_exists(&cfg_path).and_then(|()| rgp_config::load(&cfg_path)) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("config error at {}: {e}", cfg_path.display());
@@ -73,6 +73,21 @@ fn main() {
     join_with_timeout(h_rtr, "router");
     join_with_timeout(h_phys, "input-physical");
     join_with_timeout(h_ai,  "input-ai-server");
+}
+
+const DEFAULT_CONFIG: &str = include_str!("../../../assets/config.default.toml");
+
+fn ensure_config_exists(path: &std::path::Path) -> Result<(), RgpError> {
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(RgpError::Io)?;
+    }
+    std::fs::write(path, DEFAULT_CONFIG).map_err(RgpError::Io)?;
+    tracing::info!(target: "riptheGamePad", path = %path.display(),
+                   "wrote default config template");
+    Ok(())
 }
 
 fn join_with_timeout(h: std::thread::JoinHandle<Result<(), RgpError>>, name: &str) {
