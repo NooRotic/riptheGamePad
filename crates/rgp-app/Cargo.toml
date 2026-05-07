@@ -1,0 +1,28 @@
+[package]
+name = "rgp-app"
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "riptheGamePad"
+path = "src/main.rs"
+
+[dependencies]
+rgp-core             = { path = "../rgp-core" }
+rgp-config           = { path = "../rgp-config" }
+rgp-input-physical   = { path = "../rgp-input-physical" }
+rgp-input-ai         = { path = "../rgp-input-ai" }
+rgp-input-ai-server  = { path = "../rgp-input-ai-server" }
+rgp-router           = { path = "../rgp-router" }
+rgp-virtual-pad      = { path = "../rgp-virtual-pad" }
+rgp-tray             = { path = "../rgp-tray" }
+crossbeam-channel    = { workspace = true }
+tracing              = { workspace = true }
+tracing-subscriber   = { workspace = true }
+clap                 = { version = "4", features = ["derive"] }
+directories          = "5"
+
+[dev-dependencies]
+vigem-client = { workspace = true }
