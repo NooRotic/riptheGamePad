@@ -111,12 +111,20 @@ fn source_id_for(gilrs: &Gilrs, id: GamepadId) -> String {
 pub fn list_connected() -> Vec<DeviceInfo> {
     let mut gilrs = match Gilrs::new() {
         Ok(g) => g,
+        Err(gilrs::Error::NotImplemented(g)) => g,
         Err(_) => return vec![],
     };
-    // Drain any pending events. On some Windows setups gilrs.gamepads()
-    // returns an empty iterator until the first poll runs; this ensures
-    // XInput / DirectInput devices already plugged in get enumerated.
-    while gilrs.next_event().is_some() {}
+    // gilrs's Windows backend polls XInput on a background thread; the
+    // initial scan races with gamepads() if we enumerate immediately.
+    // Poll in 50ms cycles up to 500ms total; exit early as soon as any
+    // device is reported. Required for already-connected devices to show.
+    for _ in 0..10 {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        while gilrs.next_event().is_some() {}
+        if gilrs.gamepads().any(|(_, gp)| gp.is_connected()) {
+            break;
+        }
+    }
     gilrs
         .gamepads()
         .filter(|(_id, gp)| gp.is_connected())
