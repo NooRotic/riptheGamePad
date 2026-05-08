@@ -11,7 +11,7 @@ struct Args {
     #[arg(long, help = "Path to config TOML (default: %APPDATA%/riptheGamePad/config.toml)")]
     config: Option<PathBuf>,
 
-    #[arg(long, help = "Print connected gamepad UUIDs and exit")]
+    #[arg(long, help = "Print connected gamepad identifiers (xinput:N or uuid:...) and exit")]
     list_devices: bool,
 }
 
@@ -39,16 +39,26 @@ fn main() {
             println!("No gamepads detected. Plug in a controller and try again.");
         } else {
             println!("Connected gamepads:");
+            let mut first_id: Option<String> = None;
             for d in devices {
-                let uuid = match d.id {
+                let id_str = match d.id {
                     rgp_core::SourceId::Physical(s) => s,
                     _ => "(unknown)".to_string(),
                 };
-                println!("  {} → {}", uuid, d.name);
+                println!("  {} → {}", id_str, d.name);
+                if first_id.is_none() {
+                    first_id = Some(id_str);
+                }
             }
             println!();
-            println!("Add an entry to [devices] in your config.toml:");
-            println!("  fight_stick = \"<one of the uuids above>\"");
+            println!("Add an entry to [devices] in your config.toml. For example:");
+            if let Some(id) = first_id {
+                println!("  fight_stick = \"{id}\"");
+            } else {
+                println!("  fight_stick = \"xinput:0\"");
+            }
+            println!();
+            println!("xinput:N is an XInput slot index (0..3). uuid:... is for non-XInput devices.");
         }
         return;
     }

@@ -7,8 +7,11 @@
 #   - F9 / F10 cycle profiles, Ctrl+F12 panic-disconnect
 #
 # To add a physical fight stick / pad:
-#   1. Run `riptheGamePad --list-devices` to print plugged-in UUIDs.
-#   2. Add an entry under `[devices]` mapping a friendly alias to that UUID.
+#   1. Run `riptheGamePad --list-devices` to print plugged-in identifiers
+#      (XInput devices show as `xinput:N` where N is the slot 0..3;
+#      non-XInput devices show as `uuid:...`).
+#   2. Add an entry under `[devices]` mapping a friendly alias to the
+#      identifier (e.g., `fight_stick = "xinput:0"`).
 #   3. Add a profile that lists the alias under `inputs` and define
 #      `[[profile.rule]]` blocks (or `to = "passthrough"`) for the controls
 #      you want.
