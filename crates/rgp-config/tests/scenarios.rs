@@ -127,7 +127,7 @@ fn fightstick_mixer_compiles_to_lookup_table() {
     let cfg = parse_str(FIGHTSTICK_MIXER).unwrap();
     let compiled = cfg.compile(&"fightstick-mixer".into()).unwrap();
     let key = (
-        rgp_core::DeviceMatcher::Exact("fight_stick_2".into()),
+        rgp_core::DeviceMatcher::Exact("uuid:def".into()),
         Control::Button(ButtonId::DPadUp),
     );
     let (action, _mods) = compiled.rules.get(&key).expect("rule must exist");
@@ -259,7 +259,7 @@ fn pad_passthrough_compiles_passthrough_device() {
     use rgp_core::DeviceMatcher;
     let cfg = parse_str(ALL_SCENARIOS).unwrap();
     let compiled = cfg.compile(&"pad-passthrough".into()).unwrap();
-    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("xbox_pad".into())),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("uuid:030000005e0400000202000000007200".into())),
         "xbox_pad must be in passthrough set");
 }
 
@@ -297,7 +297,7 @@ fn fightstick_plus_ai_compiles_both_passthrough() {
     use rgp_core::DeviceMatcher;
     let cfg = parse_str(ALL_SCENARIOS).unwrap();
     let compiled = cfg.compile(&"fightstick-plus-ai".into()).unwrap();
-    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("fight_stick".into())),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("uuid:03000000d62000002000000000007200".into())),
         "fight_stick must be in passthrough set");
     assert!(compiled.passthrough.contains_key(&DeviceMatcher::AiAny),
         "AiAny must be in passthrough set");
@@ -328,7 +328,7 @@ fn fightstick_mixer_compiles_all_dpad_rules() {
     ];
 
     for (btn, expected_axis, expected_value) in cases {
-        let key = (DeviceMatcher::Exact("fight_stick_2".into()), Control::Button(btn));
+        let key = (DeviceMatcher::Exact("uuid:03000000d62000002000000000007201".into()), Control::Button(btn));
         let (action, _mods) = compiled.rules.get(&key)
             .unwrap_or_else(|| panic!("rule for {btn:?} must exist"));
         match action {
@@ -476,7 +476,7 @@ panic_disconnect = "Ctrl+F12"
 "#;
     let cfg = rgp_config::parse_str(toml).expect("must parse");
     let compiled = cfg.compile(&"p".into()).expect("must compile");
-    let dev = rgp_core::DeviceMatcher::Exact("d".into());
+    let dev = rgp_core::DeviceMatcher::Exact("uuid:1".into());
     let mods = compiled.passthrough.get(&dev).expect("device in passthrough");
     assert!((mods.deadzone - 0.05).abs() < 1e-6);
     assert!((mods.sensitivity - 0.7).abs() < 1e-6);

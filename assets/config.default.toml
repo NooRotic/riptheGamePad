@@ -17,9 +17,15 @@
 # four reference scenarios (mixer, pad-passthrough, ai-only, copilot).
 
 [devices]
-# fight_stick   = "uuid:03000000d62000002000000000007200"
-# fight_stick_2 = "uuid:03000000d62000002000000000007201"
-# xbox_pad      = "uuid:030000005e0400000202000000007200"
+# Aliases here once you know your device's identifier. For XInput devices
+# (Xbox 360 / Xbox One controllers, sticks in X-Input mode) use 'xinput:0',
+# 'xinput:1', etc. — the slot number maps to gilrs's GamepadId order.
+# For non-XInput devices (rare on Windows), use 'uuid:...' as printed by
+# `riptheGamePad --list-devices`.
+#
+# fight_stick   = "xinput:0"
+# fight_stick_2 = "xinput:1"
+# xbox_pad      = "xinput:0"
 
 [[profile]]
 id = "ai-only"

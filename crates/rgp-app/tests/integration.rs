@@ -169,7 +169,7 @@ fn ai_only_profile_press_south_appears_on_pad() {
 fn fightstick_mixer_dpad_appears_as_right_stick() {
     let h = Harness::new(FOUR_PROFILES_TOML);
     // Default profile is fightstick-mixer.
-    h.send_physical("fight_stick_2", Control::Button(ButtonId::DPadRight), 1.0);
+    h.send_physical("uuid:fs2", Control::Button(ButtonId::DPadRight), 1.0);
     let last = h.last().expect("submitted");
     // RightStickX = +1.0 → thumb_rx near i16::MAX
     assert!(
@@ -183,7 +183,7 @@ fn fightstick_mixer_dpad_appears_as_right_stick() {
 fn pad_passthrough_passes_button_through() {
     let h = Harness::new(FOUR_PROFILES_TOML);
     h.set_profile("pad-passthrough");
-    h.send_physical("xbox_pad", Control::Button(ButtonId::East), 1.0);
+    h.send_physical("uuid:xp1", Control::Button(ButtonId::East), 1.0);
     let last = h.last().expect("submitted");
     assert_ne!(
         last.buttons.raw & vigem_client::XButtons::B,
@@ -199,7 +199,7 @@ fn copilot_last_writer_wins_human_overrides_ai() {
     let agent = h.ai_handle("co_agent");
     agent.axis(AxisId::LeftStickX, 1.0);
     std::thread::sleep(Duration::from_millis(30));
-    h.send_physical("fight_stick", Control::Axis(AxisId::LeftStickX), -1.0);
+    h.send_physical("uuid:fs1", Control::Axis(AxisId::LeftStickX), -1.0);
     let last = h.last().expect("submitted");
     assert!(
         last.thumb_lx <= -32760,
@@ -252,4 +252,116 @@ fn panic_disconnect_releases_held_buttons() {
     let after = h.last().expect("after panic");
     assert_eq!(after.buttons.raw & vigem_client::XButtons::A, 0,
                "panic disconnect should clear held button");
+}
+
+const TWO_STICK_MIXER_TOML: &str = r#"
+[devices]
+fight_stick   = "xinput:0"
+fight_stick_2 = "xinput:1"
+
+[[profile]]
+id = "two-stick-mixer"
+name = "Two Stick Mixer"
+inputs = ["fight_stick", "fight_stick_2"]
+[[profile.rule]]
+from = { device = "fight_stick", control = "*" }
+to = "passthrough"
+[[profile.rule]]
+from = { device = "fight_stick_2", control = "DPadRight" }
+to = { axis = "RightStickX", value = 1.0 }
+[[profile.rule]]
+from = { device = "fight_stick_2", control = "DPadLeft" }
+to = { axis = "RightStickX", value = -1.0 }
+
+[default]
+profile = "two-stick-mixer"
+[server]
+addr = "127.0.0.1:7780"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+
+#[test]
+fn two_stick_mixer_with_xinput_slot_aliases() {
+    let h = Harness::new(TWO_STICK_MIXER_TOML);
+    h.send_physical("xinput:0", Control::Button(ButtonId::South), 1.0);
+    h.send_physical("xinput:1", Control::Button(ButtonId::DPadRight), 1.0);
+
+    let last = h.last().expect("submitted");
+    assert_ne!(last.buttons.raw & vigem_client::XButtons::A, 0,
+               "xinput:0 South should set A bit");
+    assert!(last.thumb_rx >= 32760,
+            "xinput:1 DPadRight should set RightStickX to max, got {}", last.thumb_rx);
+}
+
+const DEADZONE_TOML: &str = r#"
+[devices]
+pad = "xinput:0"
+
+[[profile]]
+id = "deadzone-test"
+name = "Deadzone"
+inputs = ["pad"]
+[[profile.rule]]
+from = { device = "pad", control = "*" }
+to = "passthrough"
+deadzone = 0.2
+
+[default]
+profile = "deadzone-test"
+[server]
+addr = "127.0.0.1:7781"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+
+#[test]
+fn deadzone_applied_through_full_pipeline() {
+    let h = Harness::new(DEADZONE_TOML);
+    // Prime the axis with a value above the deadzone so the first pad state
+    // is submitted; then drive it back below the deadzone to verify clamping.
+    h.send_physical("xinput:0", Control::Axis(AxisId::LeftStickX), 0.5);
+    let primed = h.last().expect("primed");
+    assert!(primed.thumb_lx > 16000,
+            "0.5 above deadzone should pass; got {}", primed.thumb_lx);
+    h.send_physical("xinput:0", Control::Axis(AxisId::LeftStickX), 0.1);
+    let mid = h.last().expect("mid");
+    assert_eq!(mid.thumb_lx, 0,
+               "0.1 below 0.2 deadzone should be zero, got {}", mid.thumb_lx);
+}
+
+const INVERT_Y_TOML: &str = r#"
+[devices]
+pad = "xinput:0"
+
+[[profile]]
+id = "invert-y"
+name = "Invert Y"
+inputs = ["pad"]
+[[profile.rule]]
+from = { device = "pad", control = "RightStickY" }
+to = "passthrough"
+invert = true
+
+[default]
+profile = "invert-y"
+[server]
+addr = "127.0.0.1:7782"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+
+#[test]
+fn inverted_axis_visible_on_virtual_pad() {
+    let h = Harness::new(INVERT_Y_TOML);
+    h.send_physical("xinput:0", Control::Axis(AxisId::RightStickY), 1.0);
+    let last = h.last().expect("submitted");
+    assert!(last.thumb_ry <= -32760,
+            "inverted +1.0 should appear as i16::MIN-ish, got {}", last.thumb_ry);
 }

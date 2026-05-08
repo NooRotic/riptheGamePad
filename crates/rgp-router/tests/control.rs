@@ -33,9 +33,9 @@ fn panic_disconnect_zeros_state_and_emits_snapshot() {
     let (_sd_tx, sd_rx) = bounded::<()>(0);
     let _h = router_run(events_rx, ctl_rx, pad_tx, cfg, sd_rx);
 
-    // Set a button via passthrough.
+    // Set a button via passthrough using the resolved device ID (not alias).
     events_tx.send(InputEvent {
-        source: SourceId::Physical("d".into()),
+        source: SourceId::Physical("uuid:1".into()),
         control: Control::Button(ButtonId::South),
         value: 1.0,
         timestamp: std::time::Instant::now(),

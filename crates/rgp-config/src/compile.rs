@@ -77,9 +77,19 @@ pub(crate) fn input_to_matcher(s: &str) -> DeviceMatcher {
         DeviceMatcher::AiClient(id.into())
     } else if s == "xinput:*" {
         DeviceMatcher::XInputAny
+    } else if let Some(slot) = s.strip_prefix("xinput:") {
+        // Specific xinput slot — match exactly (e.g. "xinput:0")
+        let _ = slot; // slot kept for clarity
+        DeviceMatcher::Exact(s.into())
     } else {
         DeviceMatcher::Exact(s.into())
     }
+}
+
+/// Resolve an alias (or bare device ID) through the devices map, then build a matcher.
+fn alias_to_matcher(alias: &str, devices: &std::collections::HashMap<String, String>) -> DeviceMatcher {
+    let resolved = devices.get(alias).map(|s| s.as_str()).unwrap_or(alias);
+    input_to_matcher(resolved)
 }
 
 impl super::schema::Config {
@@ -91,10 +101,10 @@ impl super::schema::Config {
         let mut rules = HashMap::new();
         let mut passthrough: HashMap<DeviceMatcher, Modifiers> = HashMap::new();
         for input in &profile.inputs {
-            inputs.insert(input_to_matcher(input));
+            inputs.insert(alias_to_matcher(input, &self.devices));
         }
         for rule in &profile.rules {
-            let dev = input_to_matcher(&rule.from.device);
+            let dev = alias_to_matcher(&rule.from.device, &self.devices);
             let modifiers = Modifiers::from_mapping(rule);
             match &rule.to {
                 super::RuleTarget::Passthrough(s) if s == "passthrough" => {
