@@ -8,6 +8,17 @@ use crossbeam_channel::{Receiver, Sender, TryRecvError};
 use gilrs::{EventType, GamepadId, Gilrs};
 use rgp_core::{Control, DeviceInfo, InputEvent, RgpError, SourceId};
 
+/// Synthesize a stable source-id string for a gamepad. XInput devices return
+/// all-zero UUIDs from gilrs (XInput exposes slots, not stable per-device IDs);
+/// for those we emit `xinput:<slot>`. Non-XInput devices use the gilrs UUID.
+fn synthesize_source_id(uuid_bytes: [u8; 16], slot: usize) -> String {
+    if uuid_bytes == [0u8; 16] {
+        format!("xinput:{slot}")
+    } else {
+        format!("uuid:{}", uuid::Uuid::from_bytes(uuid_bytes))
+    }
+}
+
 /// Spawn the physical-gamepad polling thread.
 ///
 /// The thread owns a `Gilrs` instance and polls it in a tight non-blocking
@@ -93,13 +104,13 @@ pub fn run(
 
 /// Return a stable string ID for the gamepad with the given `id`.
 ///
-/// While the gamepad is connected we use its UUID (from the HID descriptor).
-/// If it has already been removed from gilrs we fall back to the debug
-/// representation of the `GamepadId`.
+/// For connected gamepads, synthesize an XInput slot or UUID as appropriate.
+/// If it has already been removed from gilrs, fall back to a disconnected marker.
 fn source_id_for(gilrs: &Gilrs, id: GamepadId) -> String {
+    let slot = usize::from(id);
     match gilrs.connected_gamepad(id) {
-        Some(gp) => format!("uuid:{}", uuid::Uuid::from_bytes(gp.uuid())),
-        None => format!("disconnected:{id:?}"),
+        Some(gp) => synthesize_source_id(gp.uuid(), slot),
+        None => format!("disconnected:{slot}"),
     }
 }
 
@@ -128,10 +139,44 @@ pub fn list_connected() -> Vec<DeviceInfo> {
     gilrs
         .gamepads()
         .filter(|(_id, gp)| gp.is_connected())
-        .map(|(_id, gp)| DeviceInfo {
-            id: SourceId::Physical(format!("uuid:{}", uuid::Uuid::from_bytes(gp.uuid()))),
-            name: gp.name().to_string(),
-            connected: true,
+        .map(|(id, gp)| {
+            let slot = usize::from(id);
+            DeviceInfo {
+                id: SourceId::Physical(synthesize_source_id(gp.uuid(), slot)),
+                name: gp.name().to_string(),
+                connected: true,
+            }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod synthesize_tests {
+    use super::synthesize_source_id;
+
+    #[test]
+    fn zero_uuid_returns_xinput_slot() {
+        assert_eq!(synthesize_source_id([0u8; 16], 0), "xinput:0");
+        assert_eq!(synthesize_source_id([0u8; 16], 1), "xinput:1");
+        assert_eq!(synthesize_source_id([0u8; 16], 3), "xinput:3");
+    }
+
+    #[test]
+    fn nonzero_uuid_returns_uuid_format() {
+        let mut bytes = [0u8; 16];
+        bytes[0] = 0xab;
+        let id = synthesize_source_id(bytes, 0);
+        assert!(id.starts_with("uuid:"));
+        assert!(id.contains("ab"));
+    }
+
+    #[test]
+    fn slot_index_ignored_when_uuid_nonzero() {
+        let mut bytes = [0u8; 16];
+        bytes[15] = 0x42;
+        assert_eq!(
+            synthesize_source_id(bytes, 0),
+            synthesize_source_id(bytes, 7),
+        );
+    }
 }

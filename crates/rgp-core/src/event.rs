@@ -66,4 +66,20 @@ mod tests {
         assert!(DeviceMatcher::AiClient("a".into()).matches(&SourceId::Ai("a".into())));
         assert!(!DeviceMatcher::AiClient("a".into()).matches(&SourceId::Ai("b".into())));
     }
+
+    #[test]
+    fn xinput_any_matches_xinput_slots() {
+        use crate::source::DeviceMatcher;
+        assert!(DeviceMatcher::XInputAny.matches(&SourceId::Physical("xinput:0".into())));
+        assert!(DeviceMatcher::XInputAny.matches(&SourceId::Physical("xinput:1".into())));
+        assert!(DeviceMatcher::XInputAny.matches(&SourceId::Physical("xinput:9".into())));
+    }
+
+    #[test]
+    fn xinput_any_rejects_non_xinput() {
+        use crate::source::DeviceMatcher;
+        assert!(!DeviceMatcher::XInputAny.matches(&SourceId::Physical("uuid:abc".into())));
+        assert!(!DeviceMatcher::XInputAny.matches(&SourceId::Physical("xbox_pad".into())));
+        assert!(!DeviceMatcher::XInputAny.matches(&SourceId::Ai("client".into())));
+    }
 }
