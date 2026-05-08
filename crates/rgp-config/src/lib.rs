@@ -21,6 +21,125 @@ pub fn load(path: &Path) -> Result<Config, RgpError> {
     parse_str(&s)
 }
 
+/// One-shot migration for v1 configs that referenced XInput devices via the
+/// all-zeros UUID gilrs returned in v1 (`uuid:00000000-0000-0000-0000-000000000000`).
+/// In v2 those devices report as `xinput:N`. This function detects the literal
+/// v1 string in the config file and rewrites it to `xinput:0`, writing a
+/// backup to `<path>.v1.bak` first.
+///
+/// No-op if the file does not exist or does not contain the v1 string.
+/// Idempotent.
+pub fn maybe_migrate_v1_config(path: &Path) -> Result<(), RgpError> {
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(RgpError::Io(e)),
+    };
+    const V1_ZERO_UUID: &str = "uuid:00000000-0000-0000-0000-000000000000";
+    if !content.contains(V1_ZERO_UUID) {
+        return Ok(());
+    }
+    let backup_path: std::path::PathBuf = {
+        let mut p = path.as_os_str().to_owned();
+        p.push(".v1.bak");
+        p.into()
+    };
+    std::fs::write(&backup_path, &content).map_err(RgpError::Io)?;
+    let migrated = content.replace(V1_ZERO_UUID, "xinput:0");
+    std::fs::write(path, &migrated).map_err(RgpError::Io)?;
+    tracing::info!(
+        target: "rgp::config",
+        path = %path.display(),
+        backup = %backup_path.display(),
+        "migrated v1 config: replaced all-zeros UUID with xinput:0"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod migration_tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn temp_path(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir();
+        let mut p = dir.clone();
+        p.push(format!("rgp-migration-test-{}-{}.toml", name, std::process::id()));
+        // Best-effort cleanup of any leftover from prior runs.
+        let _ = std::fs::remove_file(&p);
+        let bak = {
+            let mut s = p.as_os_str().to_owned();
+            s.push(".v1.bak");
+            std::path::PathBuf::from(s)
+        };
+        let _ = std::fs::remove_file(&bak);
+        p
+    }
+
+    #[test]
+    fn no_op_if_file_missing() {
+        let path = temp_path("missing");
+        let _ = std::fs::remove_file(&path);
+        maybe_migrate_v1_config(&path).expect("should not error on missing file");
+        assert!(!path.exists(), "migration should not create a file");
+    }
+
+    #[test]
+    fn no_op_if_no_v1_uuid() {
+        let path = temp_path("no_uuid");
+        std::fs::write(&path, "fight_stick = \"xinput:0\"\n").unwrap();
+        maybe_migrate_v1_config(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "fight_stick = \"xinput:0\"\n");
+        let bak = {
+            let mut s = path.as_os_str().to_owned();
+            s.push(".v1.bak");
+            std::path::PathBuf::from(s)
+        };
+        assert!(!bak.exists(), "no backup should be written when no migration occurred");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn migrates_all_zeros_uuid_and_writes_backup() {
+        let path = temp_path("zero_uuid");
+        let original = "fight_stick = \"uuid:00000000-0000-0000-0000-000000000000\"\nother = \"value\"\n";
+        std::fs::write(&path, original).unwrap();
+        maybe_migrate_v1_config(&path).unwrap();
+        let migrated = std::fs::read_to_string(&path).unwrap();
+        assert!(migrated.contains("xinput:0"), "expected xinput:0 substitution, got: {migrated}");
+        assert!(!migrated.contains("uuid:00000000"), "v1 string should be removed");
+        assert!(migrated.contains("other = \"value\""), "other content preserved");
+        let bak = {
+            let mut s = path.as_os_str().to_owned();
+            s.push(".v1.bak");
+            std::path::PathBuf::from(s)
+        };
+        assert!(bak.exists(), "backup must be written");
+        assert_eq!(std::fs::read_to_string(&bak).unwrap(), original);
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&bak);
+    }
+
+    #[test]
+    fn migration_is_idempotent() {
+        let path = temp_path("idempotent");
+        let original = "fight_stick = \"uuid:00000000-0000-0000-0000-000000000000\"\n";
+        std::fs::write(&path, original).unwrap();
+        maybe_migrate_v1_config(&path).unwrap();
+        let after_first = std::fs::read_to_string(&path).unwrap();
+        maybe_migrate_v1_config(&path).unwrap();
+        let after_second = std::fs::read_to_string(&path).unwrap();
+        assert_eq!(after_first, after_second);
+        let bak = {
+            let mut s = path.as_os_str().to_owned();
+            s.push(".v1.bak");
+            std::path::PathBuf::from(s)
+        };
+        let _ = std::fs::remove_file(&path);
+        let _ = std::fs::remove_file(&bak);
+    }
+}
+
 fn validate(cfg: &Config) -> Result<(), RgpError> {
     // Duplicate profile ids
     let mut seen = std::collections::HashSet::new();

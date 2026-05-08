@@ -65,7 +65,10 @@ fn main() {
 
     let cfg_path = config_path(&args);
     tracing::info!(path = %cfg_path.display(), "loading config");
-    let config = match ensure_config_exists(&cfg_path).and_then(|()| rgp_config::load(&cfg_path)) {
+    let config = match ensure_config_exists(&cfg_path)
+        .and_then(|()| rgp_config::maybe_migrate_v1_config(&cfg_path))
+        .and_then(|()| rgp_config::load(&cfg_path))
+    {
         Ok(c) => c,
         Err(e) => {
             eprintln!("config error at {}: {e}", cfg_path.display());
