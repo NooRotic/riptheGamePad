@@ -10,6 +10,9 @@ use rgp_core::RgpError;
 struct Args {
     #[arg(long, help = "Path to config TOML (default: %APPDATA%/riptheGamePad/config.toml)")]
     config: Option<PathBuf>,
+
+    #[arg(long, help = "Print connected gamepad UUIDs and exit")]
+    list_devices: bool,
 }
 
 fn config_path(args: &Args) -> PathBuf {
@@ -30,9 +33,29 @@ fn main() {
         )
         .init();
 
+    if args.list_devices {
+        let devices = rgp_input_physical::list_connected();
+        if devices.is_empty() {
+            println!("No gamepads detected. Plug in a controller and try again.");
+        } else {
+            println!("Connected gamepads:");
+            for d in devices {
+                let uuid = match d.id {
+                    rgp_core::SourceId::Physical(s) => s,
+                    _ => "(unknown)".to_string(),
+                };
+                println!("  {} → {}", uuid, d.name);
+            }
+            println!();
+            println!("Add an entry to [devices] in your config.toml:");
+            println!("  fight_stick = \"<one of the uuids above>\"");
+        }
+        return;
+    }
+
     let cfg_path = config_path(&args);
     tracing::info!(path = %cfg_path.display(), "loading config");
-    let config = match rgp_config::load(&cfg_path) {
+    let config = match ensure_config_exists(&cfg_path).and_then(|()| rgp_config::load(&cfg_path)) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("config error at {}: {e}", cfg_path.display());
@@ -44,12 +67,16 @@ fn main() {
     let pad = match rgp_virtual_pad::connect() {
         Ok(p) => p,
         Err(e) => {
-            tracing::error!(?e, "ViGEmBus probe failed");
-            // For v1: print error and exit. A future improvement is to run the
-            // tray in red-error mode without input/router threads.
-            eprintln!("ViGEmBus error: {e}");
-            eprintln!("Install ViGEmBus from https://github.com/ViGEm/ViGEmBus/releases and try again.");
-            std::process::exit(2);
+            tracing::error!(?e, "ViGEmBus probe failed; entering tray-error mode");
+            let msg = format!("{e}. Install ViGEmBus from github.com/ViGEm/ViGEmBus/releases");
+            // Don't spawn input/router threads — only the tray runs.
+            if let Err(tray_err) = rgp_tray::run_error_mode(msg) {
+                tracing::error!(?tray_err, "error-mode tray failed");
+                eprintln!("ViGEmBus error: {e}");
+                eprintln!("(Additionally, the error tray failed to start: {tray_err})");
+                std::process::exit(2);
+            }
+            return;
         }
     };
 
@@ -73,6 +100,21 @@ fn main() {
     join_with_timeout(h_rtr, "router");
     join_with_timeout(h_phys, "input-physical");
     join_with_timeout(h_ai,  "input-ai-server");
+}
+
+const DEFAULT_CONFIG: &str = include_str!("../../../assets/config.default.toml");
+
+fn ensure_config_exists(path: &std::path::Path) -> Result<(), RgpError> {
+    if path.exists() {
+        return Ok(());
+    }
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(RgpError::Io)?;
+    }
+    std::fs::write(path, DEFAULT_CONFIG).map_err(RgpError::Io)?;
+    tracing::info!(target: "riptheGamePad", path = %path.display(),
+                   "wrote default config template");
+    Ok(())
 }
 
 fn join_with_timeout(h: std::thread::JoinHandle<Result<(), RgpError>>, name: &str) {

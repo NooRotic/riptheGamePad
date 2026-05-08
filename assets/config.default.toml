@@ -1,0 +1,42 @@
+# riptheGamePad config — first-run minimal template
+#
+# What this gives you out of the box:
+#   - One profile (`ai-only`) accepting WebSocket commands from any AI client,
+#     passed straight through to the virtual pad.
+#   - WebSocket server on 127.0.0.1:7777
+#   - F9 / F10 cycle profiles, Ctrl+F12 panic-disconnect
+#
+# To add a physical fight stick / pad:
+#   1. Run `riptheGamePad --list-devices` to print plugged-in UUIDs.
+#   2. Add an entry under `[devices]` mapping a friendly alias to that UUID.
+#   3. Add a profile that lists the alias under `inputs` and define
+#      `[[profile.rule]]` blocks (or `to = "passthrough"`) for the controls
+#      you want.
+#
+# See docs/superpowers/specs/2026-05-07-riptheGamePad-design.md §6 for the
+# four reference scenarios (mixer, pad-passthrough, ai-only, copilot).
+
+[devices]
+# fight_stick   = "uuid:03000000d62000002000000000007200"
+# fight_stick_2 = "uuid:03000000d62000002000000000007201"
+# xbox_pad      = "uuid:030000005e0400000202000000007200"
+
+[[profile]]
+id = "ai-only"
+name = "AI Driver"
+inputs = ["ai:*"]
+
+[[profile.rule]]
+from = { device = "ai:*", control = "*" }
+to = "passthrough"
+
+[default]
+profile = "ai-only"
+
+[server]
+addr = "127.0.0.1:7777"
+
+[hotkeys]
+next_profile     = "F9"
+prev_profile     = "F10"
+panic_disconnect = "Ctrl+F12"
