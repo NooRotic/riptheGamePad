@@ -509,3 +509,57 @@ panic_disconnect = "Ctrl+F12"
     assert!(compiled.inputs.contains(&rgp_core::DeviceMatcher::XInputAny));
     assert!(compiled.passthrough.contains_key(&rgp_core::DeviceMatcher::XInputAny));
 }
+
+#[test]
+fn wildcard_with_set_axis_is_validation_error() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "*" }
+to = { axis = "RightStickX", value = 1.0 }
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = rgp_config::parse_str(bad).expect_err("must reject");
+    let msg = format!("{err}");
+    assert!(msg.contains("wildcard") || msg.contains("*"),
+            "expected wildcard message, got: {msg}");
+}
+
+#[test]
+fn wildcard_with_set_button_is_validation_error() {
+    let bad = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "*" }
+to = { button = "South", value = true }
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let err = rgp_config::parse_str(bad).expect_err("must reject");
+    let msg = format!("{err}");
+    assert!(msg.contains("wildcard") || msg.contains("*"),
+            "expected wildcard message, got: {msg}");
+}

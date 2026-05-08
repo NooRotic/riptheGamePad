@@ -109,11 +109,11 @@ impl super::schema::Config {
             match &rule.to {
                 super::RuleTarget::Passthrough(s) if s == "passthrough" => {
                     if let Some(prev) = passthrough.insert(dev.clone(), modifiers) {
-                        if !prev.is_default() && !modifiers.is_default() {
+                        if !prev.is_default() || !modifiers.is_default() {
                             tracing::warn!(
                                 target: "rgp::config",
                                 device = ?dev,
-                                "multiple passthrough rules with non-default modifiers; last wins"
+                                "multiple passthrough rules for same device; modifiers from later rule win"
                             );
                         }
                     }

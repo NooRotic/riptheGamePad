@@ -66,6 +66,25 @@ fn validate(cfg: &Config) -> Result<(), RgpError> {
         }
     }
 
+    // Wildcard 'control = "*"' is only valid with 'to = "passthrough"'.
+    // Pairing it with SetAxis/SetButton has no defined semantics — reject early.
+    for p in &cfg.profiles {
+        for r in &p.rules {
+            if r.from.control == "*" {
+                match &r.to {
+                    RuleTarget::Passthrough(_) => {} // OK
+                    RuleTarget::SetAxis { .. } | RuleTarget::SetButton { .. } => {
+                        return Err(RgpError::Config { line: None,
+                            msg: format!(
+                                "wildcard control '*' on rule (device={}) cannot be paired with SetAxis/SetButton; use a specific control name or change 'to' to \"passthrough\"",
+                                r.from.device)
+                        });
+                    }
+                }
+            }
+        }
+    }
+
     // rule control names parse (skip wildcard)
     for p in &cfg.profiles {
         for r in &p.rules {
