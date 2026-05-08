@@ -18,6 +18,7 @@
 #   rgp-config           → open the user's config.toml in your default editor
 #   rgp-where            → print the user's config.toml path
 #   rgp-bak              → list any .v1.bak files written by the migrator
+#   rgp-ws-smoke         → run scripts/ws-smoke.py against the running app
 
 $script:RgpRoot   = "C:\Dev\projects\riptheGamePad"
 $script:RgpConfig = "$env:APPDATA\nooroticx\riptheGamePad\config\config.toml"
@@ -112,4 +113,10 @@ function rgp-bak {
     Get-ChildItem $dir -Filter "*.v1.bak" | Format-Table FullName, Length, LastWriteTime
 }
 
-Export-ModuleMember -Function rgp, rgp-list, rgp-debug, rgp-build, rgp-release, rgp-test, rgp-clippy, rgp-kill, rgp-reset, rgp-config, rgp-where, rgp-bak
+function rgp-ws-smoke {
+    # Sends a 15-frame sequence to the running rgp's AI WebSocket server.
+    # Requires Python with the 'websockets' package (pip install websockets).
+    python "$script:RgpRoot\scripts\ws-smoke.py" @args
+}
+
+Export-ModuleMember -Function rgp, rgp-list, rgp-debug, rgp-build, rgp-release, rgp-test, rgp-clippy, rgp-kill, rgp-reset, rgp-config, rgp-where, rgp-bak, rgp-ws-smoke
