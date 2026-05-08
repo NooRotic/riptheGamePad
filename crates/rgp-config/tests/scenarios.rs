@@ -130,7 +130,7 @@ fn fightstick_mixer_compiles_to_lookup_table() {
         rgp_core::DeviceMatcher::Exact("fight_stick_2".into()),
         Control::Button(ButtonId::DPadUp),
     );
-    let action = compiled.rules.get(&key).expect("rule must exist");
+    let (action, _mods) = compiled.rules.get(&key).expect("rule must exist");
     match action {
         rgp_config::RuleAction::SetAxis(AxisId::RightStickY, v) => assert_eq!(*v, -1.0),
         _ => panic!("wrong action: {action:?}"),
@@ -259,7 +259,7 @@ fn pad_passthrough_compiles_passthrough_device() {
     use rgp_core::DeviceMatcher;
     let cfg = parse_str(ALL_SCENARIOS).unwrap();
     let compiled = cfg.compile(&"pad-passthrough".into()).unwrap();
-    assert!(compiled.passthrough.contains(&DeviceMatcher::Exact("xbox_pad".into())),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("xbox_pad".into())),
         "xbox_pad must be in passthrough set");
 }
 
@@ -277,7 +277,7 @@ fn ai_only_compiles_passthrough_ai_any() {
     use rgp_core::DeviceMatcher;
     let cfg = parse_str(ALL_SCENARIOS).unwrap();
     let compiled = cfg.compile(&"ai-only".into()).unwrap();
-    assert!(compiled.passthrough.contains(&DeviceMatcher::AiAny),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::AiAny),
         "AiAny must be in passthrough set");
     assert!(compiled.inputs.contains(&DeviceMatcher::AiAny),
         "AiAny must be in inputs set");
@@ -297,9 +297,9 @@ fn fightstick_plus_ai_compiles_both_passthrough() {
     use rgp_core::DeviceMatcher;
     let cfg = parse_str(ALL_SCENARIOS).unwrap();
     let compiled = cfg.compile(&"fightstick-plus-ai".into()).unwrap();
-    assert!(compiled.passthrough.contains(&DeviceMatcher::Exact("fight_stick".into())),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::Exact("fight_stick".into())),
         "fight_stick must be in passthrough set");
-    assert!(compiled.passthrough.contains(&DeviceMatcher::AiAny),
+    assert!(compiled.passthrough.contains_key(&DeviceMatcher::AiAny),
         "AiAny must be in passthrough set");
 }
 
@@ -329,7 +329,7 @@ fn fightstick_mixer_compiles_all_dpad_rules() {
 
     for (btn, expected_axis, expected_value) in cases {
         let key = (DeviceMatcher::Exact("fight_stick_2".into()), Control::Button(btn));
-        let action = compiled.rules.get(&key)
+        let (action, _mods) = compiled.rules.get(&key)
             .unwrap_or_else(|| panic!("rule for {btn:?} must exist"));
         match action {
             RuleAction::SetAxis(axis, v) => {
@@ -342,7 +342,7 @@ fn fightstick_mixer_compiles_all_dpad_rules() {
 }
 
 #[test]
-fn deadzone_field_rejected_in_v1() {
+fn deadzone_on_button_rule_is_validation_error() {
     let bad = r#"
 [devices]
 d = "uuid:1"
@@ -352,7 +352,7 @@ name = "P"
 inputs = ["d"]
 [[profile.rule]]
 from = { device = "d", control = "South" }
-to = { axis = "LeftStickX", value = 1.0 }
+to = "passthrough"
 deadzone = 0.1
 [default]
 profile = "p"
@@ -363,12 +363,14 @@ next_profile = "F9"
 prev_profile = "F10"
 panic_disconnect = "Ctrl+F12"
 "#;
-    let err = rgp_config::parse_str(bad).expect_err("must reject deadzone");
-    assert!(format!("{err}").contains("deadzone"));
+    let err = rgp_config::parse_str(bad).expect_err("must reject");
+    let msg = format!("{err}");
+    assert!(msg.contains("modifiers") || msg.contains("buttons"),
+            "expected message about modifiers/buttons, got: {msg}");
 }
 
 #[test]
-fn invert_field_rejected_in_v1() {
+fn invert_on_button_rule_is_validation_error() {
     let bad = r#"
 [devices]
 d = "uuid:1"
@@ -389,12 +391,13 @@ next_profile = "F9"
 prev_profile = "F10"
 panic_disconnect = "Ctrl+F12"
 "#;
-    let err = rgp_config::parse_str(bad).expect_err("must reject invert");
-    assert!(format!("{err}").contains("invert"));
+    let err = rgp_config::parse_str(bad).expect_err("must reject");
+    let msg = format!("{err}");
+    assert!(msg.contains("modifiers") || msg.contains("buttons"));
 }
 
 #[test]
-fn sensitivity_field_rejected_in_v1() {
+fn sensitivity_on_button_rule_is_validation_error() {
     let bad = r#"
 [devices]
 d = "uuid:1"
@@ -415,8 +418,94 @@ next_profile = "F9"
 prev_profile = "F10"
 panic_disconnect = "Ctrl+F12"
 "#;
-    let err = rgp_config::parse_str(bad).expect_err("must reject sensitivity");
-    assert!(format!("{err}").contains("sensitivity"));
+    let err = rgp_config::parse_str(bad).expect_err("must reject");
+    let msg = format!("{err}");
+    assert!(msg.contains("modifiers") || msg.contains("buttons"));
 }
 
 use rgp_config::RuleAction;
+
+#[test]
+fn deadzone_on_axis_rule_compiles() {
+    let toml = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "LeftStickX" }
+to = "passthrough"
+deadzone = 0.1
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let cfg = rgp_config::parse_str(toml).expect("must parse");
+    let _compiled = cfg.compile(&"p".into()).expect("must compile");
+}
+
+#[test]
+fn modifiers_on_wildcard_rule_compile() {
+    let toml = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["d"]
+[[profile.rule]]
+from = { device = "d", control = "*" }
+to = "passthrough"
+deadzone = 0.05
+sensitivity = 0.7
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let cfg = rgp_config::parse_str(toml).expect("must parse");
+    let compiled = cfg.compile(&"p".into()).expect("must compile");
+    let dev = rgp_core::DeviceMatcher::Exact("d".into());
+    let mods = compiled.passthrough.get(&dev).expect("device in passthrough");
+    assert!((mods.deadzone - 0.05).abs() < 1e-6);
+    assert!((mods.sensitivity - 0.7).abs() < 1e-6);
+    assert!(!mods.invert);
+}
+
+#[test]
+fn xinput_wildcard_compiles_to_xinput_any() {
+    let toml = r#"
+[devices]
+d = "uuid:1"
+[[profile]]
+id = "p"
+name = "P"
+inputs = ["xinput:*"]
+[[profile.rule]]
+from = { device = "xinput:*", control = "*" }
+to = "passthrough"
+[default]
+profile = "p"
+[server]
+addr = "127.0.0.1:7777"
+[hotkeys]
+next_profile = "F9"
+prev_profile = "F10"
+panic_disconnect = "Ctrl+F12"
+"#;
+    let cfg = rgp_config::parse_str(toml).expect("must parse");
+    let compiled = cfg.compile(&"p".into()).expect("must compile");
+    assert!(compiled.inputs.contains(&rgp_core::DeviceMatcher::XInputAny));
+    assert!(compiled.passthrough.contains_key(&rgp_core::DeviceMatcher::XInputAny));
+}

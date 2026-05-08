@@ -1,8 +1,10 @@
 pub mod schema;
 pub mod compile;
+pub mod modifiers;
 
 pub use schema::*;
 pub use compile::{CompiledProfile, RuleAction};
+pub use modifiers::Modifiers;
 
 use rgp_core::RgpError;
 use std::path::Path;
@@ -88,25 +90,25 @@ fn validate(cfg: &Config) -> Result<(), RgpError> {
         }
     }
 
-    // v1: reject modifier fields with a clear error so users don't silently
-    // get unscaled inputs. Implement them as a follow-up; for now, surface
-    // the limitation explicitly.
+    // Modifiers (deadzone/invert/sensitivity) only apply to axes and triggers.
+    // Reject them on rules whose source control is a specific button.
+    // Wildcard rules (control = "*") are allowed — modifiers no-op for button
+    // events at runtime.
     for p in &cfg.profiles {
         for r in &p.rules {
-            if r.deadzone.is_some() {
-                return Err(RgpError::Config { line: None,
-                    msg: format!("'deadzone' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
-                                 r.from.device, r.from.control) });
+            let mods = crate::modifiers::Modifiers::from_mapping(r);
+            if mods.is_default() {
+                continue;
             }
-            if r.invert {
-                return Err(RgpError::Config { line: None,
-                    msg: format!("'invert' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
-                                 r.from.device, r.from.control) });
+            if r.from.control == "*" {
+                continue;
             }
-            if r.sensitivity.is_some() {
+            if let Ok(rgp_core::Control::Button(_)) = crate::compile::parse_control(&r.from.control) {
                 return Err(RgpError::Config { line: None,
-                    msg: format!("'sensitivity' on rule (device={}, control={}) is not supported in v1; remove or wait for v2",
-                                 r.from.device, r.from.control) });
+                    msg: format!(
+                        "modifiers (deadzone/invert/sensitivity) cannot be applied to button rule (device={}, control={}); buttons are binary inputs",
+                        r.from.device, r.from.control)
+                });
             }
         }
     }
@@ -119,6 +121,12 @@ fn is_known_input(cfg: &Config, input: &str) -> bool {
         return true;
     }
     if input.starts_with("ai:") {
+        return true;
+    }
+    if input == "xinput:*" {
+        return true;
+    }
+    if input.starts_with("xinput:") {
         return true;
     }
     cfg.devices.contains_key(input)

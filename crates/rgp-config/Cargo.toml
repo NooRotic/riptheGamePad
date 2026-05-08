@@ -10,3 +10,4 @@ rgp-core = { path = "../rgp-core" }
 serde = { workspace = true }
 toml = { workspace = true }
 thiserror = { workspace = true }
+tracing = { workspace = true }
