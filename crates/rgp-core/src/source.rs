@@ -11,6 +11,7 @@ pub enum DeviceMatcher {
     Exact(String),
     AiAny,
     AiClient(String),
+    XInputAny,
 }
 
 impl DeviceMatcher {
@@ -19,6 +20,7 @@ impl DeviceMatcher {
             (DeviceMatcher::Exact(a), SourceId::Physical(b)) => a == b,
             (DeviceMatcher::AiAny, SourceId::Ai(_)) => true,
             (DeviceMatcher::AiClient(a), SourceId::Ai(b)) => a == b,
+            (DeviceMatcher::XInputAny, SourceId::Physical(b)) => b.starts_with("xinput:"),
             _ => false,
         }
     }
